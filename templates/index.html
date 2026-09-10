@@ -1,62 +1,347 @@
-{% if result %}
-<div class="result-box {{ risk_class }}">
-    {% if error %}
-        <p class="error">⚠️ Error: {{ error }}</p>
-    {% else %}
-        <p><strong>Risk Probability:</strong> {{ probability }}</p>
-        <p><strong>Risk Category:</strong> {{ risk_label }}</p>
-        <p style="font-size:0.9rem; margin-top:10px;">
-            {% if risk_class == 'high' %}
-                ⚠️ This patient is predicted to have heart disease. <br> <strong>Immediate consultation recommended.</strong>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Heart Disease Triage System</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f4f7fc;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #1a3b5d;
+            margin-bottom: 5px;
+        }
+        .subtitle {
+            text-align: center;
+            color: #555;
+            margin-bottom: 25px;
+            font-size: 0.95rem;
+        }
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+        .form-group label {
+            font-weight: 600;
+            margin-bottom: 4px;
+            font-size: 0.85rem;
+            color: #333;
+        }
+        .form-group input, .form-group select {
+            padding: 8px 10px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            background: white;
+        }
+        .form-group input:focus, .form-group select:focus {
+            border-color: #007bff;
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(0,123,255,0.2);
+        }
+        .btn {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 1.1rem;
+            border-radius: 8px;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 20px;
+            transition: background 0.2s;
+        }
+        .btn:hover {
+            background: #0056b3;
+        }
+        .result-box {
+            margin-top: 30px;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            font-size: 1.1rem;
+            background: #f8f9fa;
+        }
+        .result-box.high {
+            background: #f8d7da;
+            border: 2px solid #dc3545;
+            color: #721c24;
+        }
+        .result-box.low {
+            background: #d4edda;
+            border: 2px solid #28a745;
+            color: #155724;
+        }
+        .error {
+            color: #dc3545;
+            font-weight: bold;
+        }
+        .shap-box {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+        }
+        .shap-box h3 {
+            color: #1a3b5d;
+            margin-top: 0;
+        }
+        .shap-box img {
+            width: 100%;
+            border-radius: 6px;
+            border: 1px solid #ddd;
+            margin-top: 10px;
+        }
+        .shap-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+            margin-top: 15px;
+        }
+        .shap-table th {
+            background: #1a3b5d;
+            color: white;
+            padding: 8px;
+            text-align: left;
+        }
+        .shap-table td {
+            padding: 8px;
+            border-bottom: 1px solid #eee;
+        }
+        details {
+            margin-top: 20px;
+            text-align: left;
+        }
+        details ul {
+            columns: 2;
+            list-style: none;
+            padding: 0;
+        }
+        details ul li {
+            padding: 2px 0;
+            font-size: 0.8rem;
+            border-bottom: 1px solid #eee;
+        }
+        @media (max-width: 650px) {
+            .form-grid { grid-template-columns: 1fr; }
+            details ul { columns: 1; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>❤️ Heart Disease Triage</h1>
+        <p class="subtitle">Enter patient details using the dropdowns and numbers below.</p>
+
+        <form method="POST" action="/predict">
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>BMI (kg/m²)</label>
+                    <input type="number" step="0.1" name="BMI" required value="25.0">
+                </div>
+                <div class="form-group">
+                    <label>Physical Health Days (0-30)</label>
+                    <input type="number" step="1" min="0" max="30" name="PhysicalHealth" required value="0">
+                </div>
+                <div class="form-group">
+                    <label>Mental Health Days (0-30)</label>
+                    <input type="number" step="1" min="0" max="30" name="MentalHealth" required value="0">
+                </div>
+                <div class="form-group">
+                    <label>Sleep Time (hours per day)</label>
+                    <input type="number" step="0.5" name="SleepTime" required value="7">
+                </div>
+                <div class="form-group">
+                    <label>Sex</label>
+                    <select name="Sex">
+                        <option value="Male">Male</option>
+                        <option value="Female" selected>Female</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Smoking</label>
+                    <select name="Smoking">
+                        <option value="Yes">Yes</option>
+                        <option value="No" selected>No</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Alcohol Drinking</label>
+                    <select name="AlcoholDrinking">
+                        <option value="Yes">Yes</option>
+                        <option value="No" selected>No</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Stroke</label>
+                    <select name="Stroke">
+                        <option value="Yes">Yes</option>
+                        <option value="No" selected>No</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Difficulty Walking</label>
+                    <select name="DiffWalking">
+                        <option value="Yes">Yes</option>
+                        <option value="No" selected>No</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Physical Activity (regular)</label>
+                    <select name="PhysicalActivity">
+                        <option value="Yes" selected>Yes</option>
+                        <option value="No">No</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Asthma</label>
+                    <select name="Asthma">
+                        <option value="Yes">Yes</option>
+                        <option value="No" selected>No</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Kidney Disease</label>
+                    <select name="KidneyDisease">
+                        <option value="Yes">Yes</option>
+                        <option value="No" selected>No</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Skin Cancer</label>
+                    <select name="SkinCancer">
+                        <option value="Yes">Yes</option>
+                        <option value="No" selected>No</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Race</label>
+                    <select name="Race">
+                        <option value="White">White</option>
+                        <option value="Black">Black</option>
+                        <option value="Hispanic">Hispanic</option>
+                        <option value="Asian">Asian</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Age Category</label>
+                    <select name="AgeCategory">
+                        <option value="18-24">18-24</option>
+                        <option value="25-29">25-29</option>
+                        <option value="30-34">30-34</option>
+                        <option value="35-39">35-39</option>
+                        <option value="40-44">40-44</option>
+                        <option value="45-49" selected>45-49</option>
+                        <option value="50-54">50-54</option>
+                        <option value="55-59">55-59</option>
+                        <option value="60-64">60-64</option>
+                        <option value="65-69">65-69</option>
+                        <option value="70-74">70-74</option>
+                        <option value="75-79">75-79</option>
+                        <option value="80 or older">80 or older</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Diabetic</label>
+                    <select name="Diabetic">
+                        <option value="No" selected>No</option>
+                        <option value="Borderline">Borderline</option>
+                        <option value="Yes">Yes</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>General Health</label>
+                    <select name="GenHealth">
+                        <option value="Excellent">Excellent</option>
+                        <option value="Very good" selected>Very good</option>
+                        <option value="Good">Good</option>
+                        <option value="Fair">Fair</option>
+                        <option value="Poor">Poor</option>
+                    </select>
+                </div>
+            </div>
+            <button type="submit" class="btn">Assess Heart Disease Risk</button>
+        </form>
+
+        {% if result %}
+        <div class="result-box {{ risk_class }}">
+            {% if error %}
+                <p class="error">⚠️ Error: {{ error }}</p>
             {% else %}
-                ✅ This patient appears low risk. <br> Continue regular monitoring and healthy lifestyle.
+                <p><strong>Risk Probability:</strong> {{ probability }}</p>
+                <p><strong>Risk Category:</strong> {{ risk_label }}</p>
+                <p style="font-size:0.9rem; margin-top:10px;">
+                    {% if risk_class == 'high' %}
+                        ⚠️ This patient is predicted to have heart disease. <br> <strong>Immediate consultation recommended.</strong>
+                    {% else %}
+                        ✅ This patient appears low risk. <br> Continue regular monitoring and healthy lifestyle.
+                    {% endif %}
+                </p>
             {% endif %}
-        </p>
-    {% endif %}
-</div>
+        </div>
+        {% endif %}
 
-{% if shap_image %}
-<div style="margin-top:30px; padding:20px; background:#f8f9fa; border-radius:8px; border:1px solid #dee2e6;">
-    <h3 style="color:#1a3b5d; margin-top:0;">🔍 Why This Prediction? (SHAP Explanation)</h3>
-    <p style="font-size:0.9rem; color:#555;">
-        The chart below shows exactly which features pushed the prediction <span style="color:#dc3545; font-weight:bold;">up (red)</span> 
-        or <span style="color:#007bff; font-weight:bold;">down (blue)</span> for this specific patient.
-    </p>
-    <img src="data:image/png;base64,{{ shap_image }}" 
-         alt="SHAP Waterfall Explanation" 
-         style="width:100%; border-radius:6px; border:1px solid #ddd; margin-top:10px;">
-    
-    <h4 style="margin-top:20px;">📊 Top 5 Contributing Features</h4>
-    <table style="width:100%; border-collapse:collapse; font-size:0.85rem;">
-        <tr style="background:#1a3b5d; color:white;">
-            <th style="padding:8px; text-align:left;">Feature</th>
-            <th style="padding:8px; text-align:right;">SHAP Value</th>
-            <th style="padding:8px; text-align:left;">Effect</th>
-        </tr>
-        {% for feat in top_features %}
-        <tr style="border-bottom:1px solid #eee;">
-            <td style="padding:8px;"><strong>{{ feat.name }}</strong></td>
-            <td style="padding:8px; text-align:right;">{{ feat.value }}</td>
-            <td style="padding:8px; 
-                color:{% if feat.direction == 'increases' %}#dc3545{% else %}#007bff{% endif %};">
-                {{ feat.direction }} risk
-            </td>
-        </tr>
-        {% endfor %}
-    </table>
-</div>
-{% endif %}
+        {% if shap_image %}
+        <div class="shap-box">
+            <h3>🔍 Why This Prediction? (SHAP Explanation)</h3>
+            <p style="font-size:0.9rem; color:#555;">
+                The chart below shows exactly which features pushed the prediction 
+                <span style="color:#dc3545; font-weight:bold;">up (red)</span> or 
+                <span style="color:#007bff; font-weight:bold;">down (blue)</span> for this specific patient.
+            </p>
+            <img src="data:image/png;base64,{{ shap_image }}" alt="SHAP Waterfall Explanation">
 
-{% if raw %}
-<details style="margin-top:20px; text-align:left;">
-    <summary style="cursor:pointer; font-weight:bold;">📋 View Raw Input Summary</summary>
-    <ul style="columns:2; list-style:none; padding:0;">
-        {% for key, value in raw.items() %}
-        <li style="padding:2px 0; font-size:0.8rem; border-bottom:1px solid #eee;">
-            <b>{{ key }}</b>: {{ value }}
-        </li>
-        {% endfor %}
-    </ul>
-</details>
-{% endif %}
-{% endif %}
+            <h4 style="margin-top:20px; color:#1a3b5d;">📊 Top 5 Contributing Features</h4>
+            <table class="shap-table">
+                <tr>
+                    <th>Feature</th>
+                    <th style="text-align:right;">SHAP Value</th>
+                    <th>Effect</th>
+                </tr>
+                {% for feat in top_features %}
+                <tr>
+                    <td><strong>{{ feat.name }}</strong></td>
+                    <td style="text-align:right;">{{ feat.value }}</td>
+                    <td style="color:{% if feat.direction == 'increases' %}#dc3545{% else %}#007bff{% endif %};">
+                        {{ feat.direction }} risk
+                    </td>
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
+        {% endif %}
+
+        {% if raw %}
+        <details>
+            <summary style="cursor:pointer; font-weight:bold;">📋 View Raw Input Summary</summary>
+            <ul>
+                {% for key, value in raw.items() %}
+                <li><b>{{ key }}</b>: {{ value }}</li>
+                {% endfor %}
+            </ul>
+        </details>
+        {% endif %}
+    </div>
+</body>
+</html>
